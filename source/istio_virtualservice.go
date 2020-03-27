@@ -115,6 +115,10 @@ func NewIstioVirtualServiceSource(
 	}, nil
 }
 
+// Adds an event handler function that's called when (supported) sources have changed.
+func (sc *istioVirtualServiceSource) AddEventHandler(handler func() error, stopChan <-chan struct{}, minInterval time.Duration) {
+}
+
 // Endpoints returns endpoint objects for each host-target combination that should be processed.
 // Retrieves all virtualservice resources in the source's namespace(s).
 func (sc *istioVirtualServiceSource) Endpoints() ([]*endpoint.Endpoint, error) {
