@@ -144,17 +144,23 @@ func (sc *istioVirtualServiceSource) Endpoints() ([]*endpoint.Endpoint, error) {
 		}
 
 		gwEndpoints, err := sc.endpointsFromVirtualServiceConfig(config)
+
+		log.Info("tvendetta GW ENDPOINTS", gwEndpoints)
 		if err != nil {
 			return nil, err
 		}
 
 		// apply template if host is missing on virtualservice
+
+		log.Info("IF HOST IS MISSING ON VS", sc.combineFQDNAnnotation, len(gwEndpoints), sc.fqdnTemplate)
 		if (sc.combineFQDNAnnotation || len(gwEndpoints) == 0) && sc.fqdnTemplate != nil {
+			log.Info("IF HOST IS MISSING TRUE")
 			iEndpoints, err := sc.endpointsFromTemplate(&config)
 			if err != nil {
 				return nil, err
 			}
 
+			log.Info("iEndpoints", iEndpoints)
 			if sc.combineFQDNAnnotation {
 				gwEndpoints = append(gwEndpoints, iEndpoints...)
 			} else {
@@ -169,6 +175,7 @@ func (sc *istioVirtualServiceSource) Endpoints() ([]*endpoint.Endpoint, error) {
 
 		log.Debugf("Endpoints generated from virtualservice: %s/%s: %v", config.Namespace, config.Name, gwEndpoints)
 		sc.setResourceLabel(config, gwEndpoints)
+		log.Info("Returning Endpoints()", endpoints)
 		endpoints = append(endpoints, gwEndpoints...)
 	}
 
@@ -306,21 +313,31 @@ func (sc *istioVirtualServiceSource) targetsFromGatewayConfig(config *istiomodel
 }
 
 func (sc *istioVirtualServiceSource) targetsFromVirtualServiceConfig(vsconfig *istiomodel.Config, vsHost string) ([]string, error) {
+	log.Info("Gettting targets from VS Config")
+	vs := vsconfig.Spec.(*istionetworking.VirtualService)
+	log.Info("Checking for VS host", vs.GetHosts())
+
 	var targets []string
 	// for each host we need to iterate through the gateways because each host might match for only one of the gateways
 	for _, gateway := range vsconfig.Spec.(*istionetworking.VirtualService).Gateways {
 		gwconfig := sc.getGateway(gateway, vsconfig)
 		if gwconfig == nil {
+			log.Info("gw config nil")
 			continue
 		}
 		if !virtualServiceBindsToGateway(vsconfig, gwconfig, vsHost) {
+			log.Info("vs config doesnt bind to gateway")
 			continue
 		}
 		tgs, err := sc.targetsFromGatewayConfig(gwconfig)
 		if err != nil {
+			log.Info("err getting targets", tgs, err)
 			return targets, err
 		}
+
+		log.Info("Got gateway", gwconfig)
 		targets = append(targets, tgs...)
+		log.Info("got targets", targets)
 	}
 
 	return targets, nil
@@ -352,14 +369,18 @@ func (sc *istioVirtualServiceSource) endpointsFromVirtualServiceConfig(vsconfig 
 			host = parts[1]
 		}
 
+		log.Info("tvendetta", "Found host", host, targetsFromAnnotation)
+
 		targets := targetsFromAnnotation
 		if len(targets) == 0 {
 			targets, err = sc.targetsFromVirtualServiceConfig(&vsconfig, host)
 			if err != nil {
 				return endpoints, err
 			}
+			log.Info("tvendetta", "Found no targets for host", host)
 		}
 
+		log.Info("tvendetta", "Returning endpoints for host", endpoints)
 		endpoints = append(endpoints, endpointsForHostname(host, targets, ttl, providerSpecific, setIdentifier)...)
 	}
 
@@ -370,6 +391,7 @@ func (sc *istioVirtualServiceSource) endpointsFromVirtualServiceConfig(vsconfig 
 			targets := targetsFromAnnotation
 			if len(targets) == 0 {
 				targets, err = sc.targetsFromVirtualServiceConfig(&vsconfig, hostname)
+				log.Info("tvendetta", "Found no targets")
 				if err != nil {
 					return endpoints, err
 				}
@@ -386,17 +408,24 @@ func (sc *istioVirtualServiceSource) endpointsFromVirtualServiceConfig(vsconfig 
 func virtualServiceBindsToGateway(vsconfig, gwconfig *istiomodel.Config, vsHost string) bool {
 	vs := vsconfig.Spec.(*istionetworking.VirtualService)
 
+	log.Info("Checking if VS binds to GW", vsconfig, gwconfig, vsHost)
+
 	isValid := false
 	if len(vs.ExportTo) == 0 {
 		isValid = true
+		log.Info("tvendetta vsBindsToGw is True cause ExportTo=0")
 	} else {
 		for _, ns := range vs.ExportTo {
+
+			log.Info("tvendetta check exportTo", ns, (ns == gwconfig.Namespace), gwconfig.Namespace, vsconfig.Namespace)
 			if ns == "*" || ns == gwconfig.Namespace || (ns == "." && gwconfig.Namespace == vsconfig.Namespace) {
+				log.Info("tvendetta checkexportTo passed")
 				isValid = true
 			}
 		}
 	}
 	if !isValid {
+		log.Info("Check export not valid")
 		return false
 	}
 

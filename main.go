@@ -40,6 +40,8 @@ import (
 )
 
 func main() {
+	log.Infof("Tvendetta debug version")
+
 	cfg := externaldns.NewConfig()
 	if err := cfg.ParseFlags(os.Args[1:]); err != nil {
 		log.Fatalf("flag parsing error: %v", err)
